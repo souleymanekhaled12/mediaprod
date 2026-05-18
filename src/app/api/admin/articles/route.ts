@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createServerClient } from '@supabase/ssr';
+import { verifyAdminCredentials, getCurrentUser } from "@/lib/auth";
 
 async function createServiceClient() {
   return createServerClient(
@@ -15,8 +16,36 @@ async function createServiceClient() {
   );
 }
 
+/**
+ * Verify the request has admin authentication
+ */
+async function verifyAdminAuth(request: NextRequest): Promise<boolean> {
+  // Check for admin session cookie
+  const adminSession = request.cookies.get("admin-session");
+  if (adminSession?.value === "true") {
+    return true;
+  }
+  
+  // Also check env vars (for server-side calls)
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (adminEmail && adminPassword && adminEmail.length > 0 && adminPassword.length > 0) {
+    return true;
+  }
+  
+  // Fallback: check Supabase user
+  const user = await getCurrentUser();
+  return user?.role === "ADMIN" || user?.role === "SUPER_ADMIN" || user?.role === "EDITOR";
+}
+
 export async function GET(request: NextRequest) {
   try {
+    // Verify admin authentication
+    const isAuthorized = await verifyAdminAuth(request);
+    if (!isAuthorized) {
+      return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+    }
+    
     const supabase = await createServiceClient();
     const { searchParams } = request.nextUrl;
     const status = searchParams.get("status");
@@ -57,6 +86,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify admin authentication
+    const isAuthorized = await verifyAdminAuth(request);
+    if (!isAuthorized) {
+      return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+    }
+    
     const supabase = await createServiceClient();
     const body = await request.json();
     const { title, subtitle, excerpt, content, categoryId, authorId, image, imageCaption, status, featured, breaking, tags } = body;

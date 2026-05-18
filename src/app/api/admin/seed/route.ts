@@ -16,8 +16,18 @@ async function createServiceClient() {
   );
 }
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
+    // For seed, we allow it if env vars are set
+    const adminEmail = process.env.ADMIN_EMAIL;
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    
+    if (!adminEmail || !adminPassword) {
+      return NextResponse.json(
+        { success: false, error: "Admin non configuré" },
+        { status: 401 }
+      );
+    }
     const supabase = await createServiceClient();
 
     // Seed categories

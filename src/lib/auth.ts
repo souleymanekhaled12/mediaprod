@@ -37,15 +37,25 @@ export async function getAdminSession() {
   const adminEmail = process.env.ADMIN_EMAIL;
   const adminPassword = process.env.ADMIN_PASSWORD;
   
-  // This allows simple admin auth via environment variables
-  // The session is stored in a cookie by the middleware
-  if (adminEmail && adminPassword) {
+  // Check if env vars are set (both must be set)
+  if (adminEmail && adminPassword && adminEmail.length > 0 && adminPassword.length > 0) {
     return true;
   }
   
-  // Also try Supabase auth
-  const isSupabaseAdmin = await isAdmin();
-  return isSupabaseAdmin;
+  // Also check Supabase auth - this returns true if user has admin role
+  const user = await getCurrentUser();
+  return user?.role === "ADMIN" || user?.role === "SUPER_ADMIN" || user?.role === "EDITOR";
+}
+
+/**
+ * Verify admin credentials for API routes
+ * Returns true only if ADMIN_EMAIL and ADMIN_PASSWORD match
+ */
+export async function verifyAdminCredentials(email: string, password: string): Promise<boolean> {
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  
+  return email === adminEmail && password === adminPassword;
 }
 
 export async function signIn(email: string, password: string) {

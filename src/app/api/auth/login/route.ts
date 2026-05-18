@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { signIn } from "@/lib/auth";
+import { signIn, verifyAdminCredentials, isAdmin } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,7 +21,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ success: true, user: result.user });
+    // Verify the user has admin access
+    const isAdminUser = await verifyAdminCredentials(email, password);
+    if (!isAdminUser) {
+      // Also try Supabase auth
+      const supabaseAdmin = await isAdmin();
+      if (!supabaseAdmin) {
+        return NextResponse.json(
+          { error: "Accès admin requis" },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Create response with session cookie
+    const response = NextResponse.json({ 
+      success: true, 
+      user: { ...result.user, role: "ADMIN" }
+    });
+
+    // Set admin session cookie (valid for 24 hours)
+    response.cookies.set("admin-session", "true", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 60 * 60 * 24, // 24 hours
+      path: "/",
+    });
+
+    return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erreur serveur";
     return NextResponse.json({ error: message }, { status: 500 });
