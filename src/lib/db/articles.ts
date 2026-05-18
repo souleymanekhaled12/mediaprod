@@ -67,7 +67,9 @@ function toArticle(a: DbArticle): ArticleType {
       role: "AUTHOR",
     },
     authorSlug,
-    image: a.featured_image || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=1200&auto=format&fit=crop",
+    image: a.featured_image && (a.featured_image.startsWith("http") || a.featured_image.startsWith("/"))
+      ? a.featured_image
+      : "https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=1200&auto=format&fit=crop",
     imageCaption: undefined,
     publishedAt: (a.published_at || a.created_at),
     readTime: a.reading_time,

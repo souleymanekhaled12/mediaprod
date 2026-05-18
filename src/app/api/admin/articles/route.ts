@@ -95,6 +95,10 @@ export async function POST(request: NextRequest) {
     const supabase = await createServiceClient();
     const body = await request.json();
     const { title, subtitle, excerpt, content, categoryId, image, imageCaption, status, featured, breaking, tags } = body;
+    
+    // Validate and sanitize image URL
+    const featuredImage = image && (image.startsWith("http") || image.startsWith("/")) ? image : null;
+    const caption = imageCaption?.trim() || null;
 
     if (!title || !excerpt || !content || !categoryId) {
       return NextResponse.json(
@@ -130,7 +134,8 @@ export async function POST(request: NextRequest) {
         title,
         excerpt,
         content,
-        featured_image: image || null,
+        featured_image: featuredImage,
+        image_caption: caption,
         status: status === "published" ? "PUBLISHED" : "DRAFT",
         is_featured: featured || false,
         is_breaking: breaking || false,
