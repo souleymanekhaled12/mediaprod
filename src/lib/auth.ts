@@ -1,3 +1,4 @@
+import { cookies as cookiesFn } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 
 export async function getCurrentUser() {
@@ -33,16 +34,16 @@ export async function isAdmin() {
 }
 
 export async function getAdminSession() {
-  // First check if user is authenticated via Supabase auth
-  const user = await getCurrentUser();
-  
-  // Must be logged in AND have admin role
-  if (user && (user.role === "ADMIN" || user.role === "SUPER_ADMIN" || user.role === "EDITOR")) {
+  // Check for admin cookie first (set by /api/auth/login)
+  const cookies = await cookiesFn();
+  const adminCookie = cookies.get("admin-session");
+  if (adminCookie?.value === "true") {
     return true;
   }
   
-  // Not authenticated - require login
-  return false;
+  // Also check Supabase auth - this returns true if user has admin role
+  const user = await getCurrentUser();
+  return user?.role === "ADMIN" || user?.role === "SUPER_ADMIN" || user?.role === "EDITOR";
 }
 
 /**
