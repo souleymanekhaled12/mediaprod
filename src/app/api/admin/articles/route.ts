@@ -1,10 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createServerClient } from '@supabase/ssr';
+
+async function createServiceClient() {
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      cookies: {
+        getAll() { return []; },
+        setAll() {}
+      },
+    }
+  );
+}
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     const { searchParams } = request.nextUrl;
     const status = searchParams.get("status");
     const page = parseInt(searchParams.get("page") || "1", 10);
@@ -44,13 +57,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     const body = await request.json();
     const { title, subtitle, excerpt, content, categoryId, authorId, image, imageCaption, status, featured, breaking, tags } = body;
 
-    if (!title || !excerpt || !content || !categoryId || !authorId) {
+    if (!title || !excerpt || !content || !categoryId) {
       return NextResponse.json(
-        { error: "title, excerpt, content, categoryId, and authorId are required" },
+        { error: "title, excerpt, content, and categoryId are required" },
         { status: 400 }
       );
     }
@@ -88,7 +101,7 @@ export async function POST(request: NextRequest) {
         is_breaking: breaking || false,
         reading_time: readingTime,
         published_at: status === "published" ? new Date().toISOString() : null,
-        author_id: authorId,
+        author_id: authorId || null,
         category_id: categoryId,
       })
       .select(`
