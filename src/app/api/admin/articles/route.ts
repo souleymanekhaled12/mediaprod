@@ -137,6 +137,7 @@ export async function POST(request: NextRequest) {
         reading_time: readingTime,
         published_at: status === "published" ? new Date().toISOString() : null,
         category_id: categoryId,
+        author_name: authorName || null,
       })
       .select(`
         *,

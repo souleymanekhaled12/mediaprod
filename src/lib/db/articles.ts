@@ -15,7 +15,8 @@ interface DbArticle {
   reading_time: number;
   published_at: string | null;
   created_at: string;
-  author_id: string;
+  author_id: string | null;
+  author_name: string | null;
   category_id: string | null;
   users: {
     id: string;
@@ -23,7 +24,7 @@ interface DbArticle {
     avatar: string | null;
     bio: string | null;
     role: string;
-  };
+  } | null;
   categories: {
     id: string;
     name: string;
@@ -34,7 +35,9 @@ interface DbArticle {
 }
 
 function toArticle(a: DbArticle): ArticleType {
-  const authorSlug = (a.users?.name || "redaction")
+  // Use author_name if available, otherwise fall back to users table
+  const authorName = a.author_name || a.users?.name || "Ligne Rouge";
+  const authorSlug = authorName
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
