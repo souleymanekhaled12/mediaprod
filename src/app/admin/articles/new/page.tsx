@@ -12,13 +12,6 @@ interface DbCategory {
   color: string;
 }
 
-interface DbUser {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-}
-
 export default function NewArticlePage() {
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
@@ -27,14 +20,13 @@ export default function NewArticlePage() {
   const [image, setImage] = useState("");
   const [imageCaption, setImageCaption] = useState("");
   const [categoryId, setCategoryId] = useState("");
-  const [authorId, setAuthorId] = useState("");
+  const [authorName, setAuthorName] = useState("");
   const [status, setStatus] = useState<"draft" | "published">("draft");
   const [featured, setFeatured] = useState(false);
   const [breaking, setBreaking] = useState(false);
   const [tags, setTags] = useState("");
 
   const [categories, setCategories] = useState<DbCategory[]>([]);
-  const [users, setUsers] = useState<DbUser[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
@@ -45,23 +37,14 @@ export default function NewArticlePage() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [catRes, userRes] = await Promise.all([
-          fetch("/api/admin/categories"),
-          fetch("/api/admin/users"),
-        ]);
+        const catRes = await fetch("/api/admin/categories");
 
-        if (catRes.ok && userRes.ok) {
+        if (catRes.ok) {
           const cats = await catRes.json();
-          const usrs = await userRes.json();
 
           if (Array.isArray(cats) && cats.length > 0) {
             setCategories(cats);
             setCategoryId(cats[0].id);
-          }
-
-          if (Array.isArray(usrs) && usrs.length > 0) {
-            setUsers(usrs);
-            setAuthorId(usrs[0].id);
           }
 
           setDbConnected(true);
@@ -80,8 +63,8 @@ export default function NewArticlePage() {
       setError("Titre, extrait et contenu sont obligatoires.");
       return;
     }
-    if (!categoryId || !authorId) {
-      setError("Catégorie et auteur sont obligatoires.");
+    if (!categoryId) {
+      setError("Catégorie est obligatoire.");
       return;
     }
 
@@ -98,7 +81,7 @@ export default function NewArticlePage() {
           excerpt,
           content: formatContent(content),
           categoryId,
-          authorId,
+          authorName,
           image,
           imageCaption,
           status,
@@ -318,19 +301,15 @@ export default function NewArticlePage() {
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-[#7A7A7A] uppercase tracking-wider block mb-1.5">
-                    Auteur *
+                    Auteur
                   </label>
-                  <select
-                    value={authorId}
-                    onChange={(e) => setAuthorId(e.target.value)}
-                    className="w-full text-sm px-4 py-2.5 border border-[#DEDBD4] dark:border-[#3a3a4e] rounded-lg bg-white dark:bg-[#1a1a2e] text-[#1A1A1A] dark:text-white outline-none focus:border-[#C01D35] transition-colors"
-                  >
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name} ({u.role})
-                      </option>
-                    ))}
-                  </select>
+                  <input
+                    type="text"
+                    value={authorName}
+                    onChange={(e) => setAuthorName(e.target.value)}
+                    placeholder="Nom de l'auteur..."
+                    className="w-full text-sm px-4 py-2.5 border border-[#DEDBD4] dark:border-[#3a3a4e] rounded-lg bg-transparent text-[#1A1A1A] dark:text-white outline-none focus:border-[#C01D35] transition-colors"
+                  />
                 </div>
               </div>
 
