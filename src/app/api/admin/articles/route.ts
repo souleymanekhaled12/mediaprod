@@ -136,6 +136,7 @@ export async function POST(request: NextRequest) {
         is_breaking: breaking || false,
         reading_time: readingTime,
         published_at: status === "published" ? new Date().toISOString() : null,
+        author_id: "00000000-0000-0000-0000-000000000000", // placeholder - not used
         category_id: categoryId,
       })
       .select(`
