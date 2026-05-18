@@ -30,3 +30,18 @@ export async function createClient() {
     },
   )
 }
+/**
+ * Creates a service role client for admin operations (bypasses RLS).
+ */
+export async function createServiceClient() {
+  return createServerClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      cookies: {
+        getAll() { return [] },
+        setAll() {},
+      },
+    },
+  )
+}

@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { cookies as cookiesFn } from "next/headers";
+import { createServiceClient } from "@/lib/supabase/server";
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
+    // Verify admin session via cookie
+    const cookies = await cookiesFn();
+    const adminCookie = cookies.get("admin-session");
+    if (!adminCookie?.value) {
+      return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+    }
+    
+    // Use service role to bypass RLS
+    const supabase = await createServiceClient();
     
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
@@ -13,9 +22,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate file type
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml"];
     if (!allowedTypes.includes(file.type)) {
-      return NextResponse.json({ error: "Type non autorisé" }, { status: 400 });
+      return NextResponse.json({ error: "Type non autorisé: " + file.type }, { status: 400 });
     }
 
     // Validate file size (10MB max)
