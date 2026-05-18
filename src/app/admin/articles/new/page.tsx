@@ -252,31 +252,62 @@ export default function NewArticlePage() {
               </div>
 
               {/* Image URL */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-semibold text-[#7A7A7A] uppercase tracking-wider block mb-1.5">
-                    URL de l&apos;image
-                  </label>
+              <div>
+                <label className="text-xs font-semibold text-[#7A7A7A] uppercase tracking-wider block mb-1.5">
+                  Image
+                </label>
+                <div className="flex gap-2">
                   <input
                     type="text"
                     value={image}
                     onChange={(e) => setImage(e.target.value)}
-                    placeholder="https://images.unsplash.com/..."
-                    className="w-full text-sm px-4 py-2.5 border border-[#DEDBD4] dark:border-[#3a3a4e] rounded-lg bg-transparent text-[#1A1A1A] dark:text-white outline-none focus:border-[#C01D35] transition-colors"
+                    placeholder="https://images.unsplash.com/... ou[uploader une photo"
+                    className="flex-1 text-sm px-4 py-2.5 border border-[#DEDBD4] dark:border-[#3a3a4e] rounded-lg bg-transparent text-[#1A1A1A] dark:text-white outline-none focus:border-[#C01D35] transition-colors"
                   />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-[#7A7A7A] uppercase tracking-wider block mb-1.5">
-                    Légende image
+                  <label className="cursor-pointer bg-[#F2F1EE] dark:bg-[#2a2a3e] border border-[#DEDBD4] dark:border-[#3a3a4e] px-4 py-2 rounded-lg text-sm font-medium text-[#4A4A4A] dark:text-[#a0a0b0] hover:text-[#0D1B2A] dark:hover:text-white transition-colors">
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        
+                        const formData = new FormData();
+                        formData.append("file", file);
+                        
+                        setSaving(true);
+                        try {
+                          const res = await fetch("/api/admin/upload", {
+                            method: "POST",
+                            body: formData,
+                          });
+                          const data = await res.json();
+                          if (data.url) {
+                            setImage(data.url);
+                          }
+                        } finally {
+                          setSaving(false);
+                        }
+                      }}
+                    />
+                    {saving ? "..." : "Upload"}
                   </label>
-                  <input
-                    type="text"
-                    value={imageCaption}
-                    onChange={(e) => setImageCaption(e.target.value)}
-                    placeholder="Description de l'image..."
-                    className="w-full text-sm px-4 py-2.5 border border-[#DEDBD4] dark:border-[#3a3a4e] rounded-lg bg-transparent text-[#1A1A1A] dark:text-white outline-none focus:border-[#C01D35] transition-colors"
-                  />
                 </div>
+              </div>
+
+              {/* Image Caption */}
+              <div>
+                <label className="text-xs font-semibold text-[#7A7A7A] uppercase tracking-wider block mb-1.5">
+                  Légende image
+                </label>
+                <input
+                  type="text"
+                  value={imageCaption}
+                  onChange={(e) => setImageCaption(e.target.value)}
+                  placeholder="Description de l'image..."
+                  className="w-full text-sm px-4 py-2.5 border border-[#DEDBD4] dark:border-[#3a3a4e] rounded-lg bg-transparent text-[#1A1A1A] dark:text-white outline-none focus:border-[#C01D35] transition-colors"
+                />
               </div>
 
               {/* Category + Author */}
