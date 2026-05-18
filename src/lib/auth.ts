@@ -23,6 +23,13 @@ export async function isAdmin() {
   return user?.role === "ADMIN" || user?.role === "SUPER_ADMIN" || user?.role === "EDITOR";
 }
 
+/**
+ * @deprecated Use isAdmin() instead
+ */
+export async function getAdminSession() {
+  return await isAdmin();
+}
+
 export async function signIn(email: string, password: string) {
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithPassword({
