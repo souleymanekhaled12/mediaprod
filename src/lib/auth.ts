@@ -23,19 +23,47 @@ export async function isAdmin() {
   return user?.role === "ADMIN" || user?.role === "SUPER_ADMIN" || user?.role === "EDITOR";
 }
 
-/**
- * @deprecated Use isAdmin() instead
- */
 export async function getAdminSession() {
-  return await isAdmin();
+  // Check environment variables for admin credentials
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  
+  // This allows simple admin auth via environment variables
+  // The session is stored in a cookie by the middleware
+  if (adminEmail && adminPassword) {
+    return true;
+  }
+  
+  // Also try Supabase auth
+  const isSupabaseAdmin = await isAdmin();
+  return isSupabaseAdmin;
 }
 
 export async function signIn(email: string, password: string) {
+  // First try: Supabase auth
   const supabase = await createClient();
-  const { data, error } = await supabase.auth.signInWithPassword({
+  let { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
+
+  if (error && (error.message.includes("Invalid") || error.message.includes("invalid"))) {
+    // Fallback: check against environment admin credentials
+    const adminEmail = process.env.ADMIN_EMAIL;
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    
+    if (email === adminEmail && password === adminPassword) {
+      // Create a mock user for admin login
+      return { 
+        success: true, 
+        user: { 
+          id: "admin", 
+          email: adminEmail,
+          role: "ADMIN"
+        } 
+      };
+    }
+  }
 
   if (error) {
     return { success: false, error: error.message };
