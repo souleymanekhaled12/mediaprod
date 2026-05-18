@@ -33,18 +33,16 @@ export async function isAdmin() {
 }
 
 export async function getAdminSession() {
-  // Check environment variables for admin credentials
-  const adminEmail = process.env.ADMIN_EMAIL;
-  const adminPassword = process.env.ADMIN_PASSWORD;
+  // First check if user is authenticated via Supabase auth
+  const user = await getCurrentUser();
   
-  // Check if env vars are set (both must be set)
-  if (adminEmail && adminPassword && adminEmail.length > 0 && adminPassword.length > 0) {
+  // Must be logged in AND have admin role
+  if (user && (user.role === "ADMIN" || user.role === "SUPER_ADMIN" || user.role === "EDITOR")) {
     return true;
   }
   
-  // Also check Supabase auth - this returns true if user has admin role
-  const user = await getCurrentUser();
-  return user?.role === "ADMIN" || user?.role === "SUPER_ADMIN" || user?.role === "EDITOR";
+  // Not authenticated - require login
+  return false;
 }
 
 /**
