@@ -30,16 +30,7 @@ export async function updateSession(request: NextRequest) {
   )
 
   // IMPORTANT: getUser() must be called to refresh session
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  // Protect admin routes
-  if (request.nextUrl.pathname.startsWith('/admin') && !user) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/login'
-    return NextResponse.redirect(url)
-  }
+  await supabase.auth.getUser()
 
   return supabaseResponse
 }
