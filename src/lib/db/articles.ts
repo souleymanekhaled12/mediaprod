@@ -18,13 +18,6 @@ interface DbArticle {
   author_id: string | null;
   author_name: string | null;
   category_id: string | null;
-  users: {
-    id: string;
-    name: string | null;
-    avatar: string | null;
-    bio: string | null;
-    role: string;
-  } | null;
   categories: {
     id: string;
     name: string;
@@ -66,12 +59,12 @@ function toArticle(a: DbArticle): ArticleType {
     },
     categorySlug: a.categories?.slug || "non-classe",
     author: {
-      id: a.users?.id || "",
-      name: a.users?.name || "Rédaction",
+      id: "",
+      name: authorName,
       slug: authorSlug,
-      bio: a.users?.bio || "",
-      avatar: a.users?.avatar || "/images/team/default-avatar.jpg",
-      role: a.users?.role || "AUTHOR",
+      bio: "",
+      avatar: "/images/team/default-avatar.jpg",
+      role: "AUTHOR",
     },
     authorSlug,
     image: a.featured_image || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=1200&auto=format&fit=crop",
@@ -94,7 +87,6 @@ export async function getPublishedArticles(limit = 50): Promise<ArticleType[]> {
     .from("articles")
     .select(`
       *,
-      users!articles_author_id_fkey (id, name, avatar, bio, role),
       categories (id, name, slug, description, color)
     `)
     .eq("status", "PUBLISHED")
@@ -116,7 +108,7 @@ export async function getArticleBySlugFromDb(slug: string): Promise<ArticleType 
     .from("articles")
     .select(`
       *,
-      users!articles_author_id_fkey (id, name, avatar, bio, role),
+      
       categories (id, name, slug, description, color)
     `)
     .eq("slug", slug)
@@ -136,7 +128,7 @@ export async function getArticlesByCategoryFromDb(categorySlug: string, limit = 
     .from("articles")
     .select(`
       *,
-      users!articles_author_id_fkey (id, name, avatar, bio, role),
+      
       categories!inner (id, name, slug, description, color)
     `)
     .eq("status", "PUBLISHED")
@@ -174,7 +166,7 @@ export async function getRelatedArticlesFromDb(articleId: string, categoryId: st
     .from("articles")
     .select(`
       *,
-      users!articles_author_id_fkey (id, name, avatar, bio, role),
+      
       categories (id, name, slug, description, color)
     `)
     .eq("status", "PUBLISHED")
@@ -197,7 +189,7 @@ export async function searchArticlesInDb(query: string): Promise<ArticleType[]> 
     .from("articles")
     .select(`
       *,
-      users!articles_author_id_fkey (id, name, avatar, bio, role),
+      
       categories (id, name, slug, description, color)
     `)
     .eq("status", "PUBLISHED")
@@ -220,7 +212,7 @@ export async function getFeaturedArticles(limit = 5): Promise<ArticleType[]> {
     .from("articles")
     .select(`
       *,
-      users!articles_author_id_fkey (id, name, avatar, bio, role),
+      
       categories (id, name, slug, description, color)
     `)
     .eq("status", "PUBLISHED")
