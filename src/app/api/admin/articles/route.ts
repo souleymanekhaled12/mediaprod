@@ -127,22 +127,29 @@ export async function POST(request: NextRequest) {
     const wordCount = content.replace(/<[^>]*>/g, "").split(/\s+/).length;
     const readingTime = Math.max(1, Math.ceil(wordCount / 200));
 
+    // Build article data - only include optional fields if they have values
+    const articleData: Record<string, unknown> = {
+      slug: finalSlug,
+      title,
+      excerpt,
+      content,
+      featured_image: featuredImage,
+      status: status === "published" ? "PUBLISHED" : "DRAFT",
+      is_featured: featured || false,
+      is_breaking: breaking || false,
+      reading_time: readingTime,
+      published_at: status === "published" ? new Date().toISOString() : null,
+      category_id: categoryId,
+    };
+    
+    // Only add image_caption if provided and not empty
+    if (caption && caption.trim()) {
+      articleData.image_caption = caption;
+    }
+
     const { data: article, error } = await supabase
       .from("articles")
-      .insert({
-        slug: finalSlug,
-        title,
-        excerpt,
-        content,
-        featured_image: featuredImage,
-        image_caption: caption,
-        status: status === "published" ? "PUBLISHED" : "DRAFT",
-        is_featured: featured || false,
-        is_breaking: breaking || false,
-        reading_time: readingTime,
-        published_at: status === "published" ? new Date().toISOString() : null,
-        category_id: categoryId,
-      })
+      .insert(articleData)
       .select(`
         *,
         categories (id, name, slug)

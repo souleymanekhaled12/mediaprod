@@ -50,7 +50,9 @@ export async function PUT(
     if (content !== undefined) updateData.content = content;
     if (categoryId !== undefined) updateData.category_id = categoryId;
     if (image !== undefined) updateData.featured_image = image;
-    if (imageCaption !== undefined) updateData.image_caption = imageCaption;
+    if (typeof imageCaption === "string" && imageCaption.trim()) {
+      updateData.image_caption = imageCaption;
+    }
     if (featured !== undefined) updateData.is_featured = featured;
     if (breaking !== undefined) updateData.is_breaking = breaking;
     if (authorName !== undefined) updateData.author_name = authorName;
