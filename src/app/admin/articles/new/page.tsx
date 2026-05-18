@@ -20,7 +20,6 @@ export default function NewArticlePage() {
   const [image, setImage] = useState("");
   const [imageCaption, setImageCaption] = useState("");
   const [categoryId, setCategoryId] = useState("");
-  const [authorName, setAuthorName] = useState("");
   const [status, setStatus] = useState<"draft" | "published">("draft");
   const [featured, setFeatured] = useState(false);
   const [breaking, setBreaking] = useState(false);
@@ -81,7 +80,6 @@ export default function NewArticlePage() {
           excerpt,
           content: formatContent(content),
           categoryId,
-          authorName,
           image,
           imageCaption,
           status,
@@ -298,18 +296,6 @@ export default function NewArticlePage() {
                       </option>
                     ))}
                   </select>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-[#7A7A7A] uppercase tracking-wider block mb-1.5">
-                    Auteur
-                  </label>
-                  <input
-                    type="text"
-                    value={authorName}
-                    onChange={(e) => setAuthorName(e.target.value)}
-                    placeholder="Nom de l'auteur..."
-                    className="w-full text-sm px-4 py-2.5 border border-[#DEDBD4] dark:border-[#3a3a4e] rounded-lg bg-transparent text-[#1A1A1A] dark:text-white outline-none focus:border-[#C01D35] transition-colors"
-                  />
                 </div>
               </div>
 

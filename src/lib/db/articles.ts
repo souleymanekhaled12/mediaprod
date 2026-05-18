@@ -35,8 +35,8 @@ interface DbArticle {
 }
 
 function toArticle(a: DbArticle): ArticleType {
-  // Use author_name if available, otherwise fall back to users table
-  const authorName = a.author_name || a.users?.name || "Ligne Rouge";
+  // Use author_name if available, otherwise use default
+  const authorName = a.author_name || "Ligne Rouge";
   const authorSlug = authorName
     .toLowerCase()
     .normalize("NFD")

@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
     
     const supabase = await createServiceClient();
     const body = await request.json();
-    const { title, subtitle, excerpt, content, categoryId, authorName, image, imageCaption, status, featured, breaking, tags } = body;
+    const { title, subtitle, excerpt, content, categoryId, image, imageCaption, status, featured, breaking, tags } = body;
 
     if (!title || !excerpt || !content || !categoryId) {
       return NextResponse.json(
@@ -137,7 +137,6 @@ export async function POST(request: NextRequest) {
         reading_time: readingTime,
         published_at: status === "published" ? new Date().toISOString() : null,
         category_id: categoryId,
-        author_name: authorName || null,
       })
       .select(`
         *,
