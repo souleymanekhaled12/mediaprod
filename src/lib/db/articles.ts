@@ -1,18 +1,40 @@
-import { prisma } from "@/lib/prisma";
+import { createClient } from "@/lib/supabase/server";
 import type { Article as ArticleType } from "@/types";
 
-const articleInclude = {
-  author: { select: { id: true, name: true, avatar: true, bio: true, role: true } },
-  category: { select: { id: true, name: true, slug: true, description: true, color: true } },
-  tags: { include: { tag: { select: { name: true, slug: true } } } },
-} as const;
+interface DbArticle {
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string | null;
+  content: string | null;
+  featured_image: string | null;
+  status: string;
+  is_featured: boolean;
+  is_breaking: boolean;
+  view_count: number;
+  reading_time: number;
+  published_at: string | null;
+  created_at: string;
+  author_id: string;
+  category_id: string | null;
+  users: {
+    id: string;
+    name: string | null;
+    avatar: string | null;
+    bio: string | null;
+    role: string;
+  };
+  categories: {
+    id: string;
+    name: string;
+    slug: string;
+    description: string | null;
+    color: string;
+  } | null;
+}
 
-function toArticle(a: Awaited<ReturnType<typeof prisma.article.findFirst>> & {
-  author: { id: string; name: string | null; avatar: string | null; bio: string | null; role: string };
-  category: { id: string; name: string; slug: string; description: string | null; color: string };
-  tags: { tag: { name: string; slug: string } }[];
-}): ArticleType {
-  const authorSlug = (a.author.name || "redaction")
+function toArticle(a: DbArticle): ArticleType {
+  const authorSlug = (a.users?.name || "redaction")
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -23,111 +45,211 @@ function toArticle(a: Awaited<ReturnType<typeof prisma.article.findFirst>> & {
     id: a.id,
     slug: a.slug,
     title: a.title,
-    subtitle: a.subtitle || "",
-    excerpt: a.excerpt,
-    body: a.body,
-    category: {
-      id: a.category.id,
-      name: a.category.name,
-      slug: a.category.slug,
-      description: a.category.description || "",
-      color: a.category.color,
+    subtitle: "",
+    excerpt: a.excerpt || "",
+    body: a.content || "",
+    category: a.categories ? {
+      id: a.categories.id,
+      name: a.categories.name,
+      slug: a.categories.slug,
+      description: a.categories.description || "",
+      color: a.categories.color,
+    } : {
+      id: "",
+      name: "Non classé",
+      slug: "non-classe",
+      description: "",
+      color: "#6B7280",
     },
-    categorySlug: a.category.slug,
+    categorySlug: a.categories?.slug || "non-classe",
     author: {
-      id: a.author.id,
-      name: a.author.name || "Rédaction",
+      id: a.users?.id || "",
+      name: a.users?.name || "Rédaction",
       slug: authorSlug,
-      bio: a.author.bio || "",
-      avatar: a.author.avatar || "/images/team/alassane-ibraima.jpg",
-      role: a.author.role,
+      bio: a.users?.bio || "",
+      avatar: a.users?.avatar || "/images/team/default-avatar.jpg",
+      role: a.users?.role || "AUTHOR",
     },
     authorSlug,
-    image: a.image || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=1200&auto=format&fit=crop",
-    imageCaption: a.imageCaption || undefined,
-    publishedAt: (a.publishedAt || a.createdAt).toISOString(),
-    readTime: a.readTime,
-    views: a.views,
+    image: a.featured_image || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=1200&auto=format&fit=crop",
+    imageCaption: undefined,
+    publishedAt: (a.published_at || a.created_at),
+    readTime: a.reading_time,
+    views: a.view_count,
     status: a.status === "PUBLISHED" ? "published" : a.status === "DRAFT" ? "draft" : "scheduled",
-    featured: a.featured,
-    breaking: a.breaking,
-    tags: a.tags.map((t) => t.tag.name),
-    locale: (a.locale || "fr") as "fr" | "en",
+    featured: a.is_featured,
+    breaking: a.is_breaking,
+    tags: [],
+    locale: "fr" as "fr" | "en",
   };
 }
 
 export async function getPublishedArticles(limit = 50): Promise<ArticleType[]> {
-  const articles = await prisma.article.findMany({
-    where: { status: "PUBLISHED" },
-    include: articleInclude,
-    orderBy: { publishedAt: "desc" },
-    take: limit,
-  });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return articles.map((a) => toArticle(a as any));
+  const supabase = await createClient();
+  
+  const { data: articles, error } = await supabase
+    .from("articles")
+    .select(`
+      *,
+      users!articles_author_id_fkey (id, name, avatar, bio, role),
+      categories (id, name, slug, description, color)
+    `)
+    .eq("status", "PUBLISHED")
+    .order("published_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error("Error fetching articles:", error);
+    return [];
+  }
+
+  return (articles || []).map((a) => toArticle(a as unknown as DbArticle));
 }
 
 export async function getArticleBySlugFromDb(slug: string): Promise<ArticleType | null> {
-  const article = await prisma.article.findUnique({
-    where: { slug },
-    include: articleInclude,
-  });
-  if (!article) return null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return toArticle(article as any);
+  const supabase = await createClient();
+  
+  const { data: article, error } = await supabase
+    .from("articles")
+    .select(`
+      *,
+      users!articles_author_id_fkey (id, name, avatar, bio, role),
+      categories (id, name, slug, description, color)
+    `)
+    .eq("slug", slug)
+    .single();
+
+  if (error || !article) {
+    return null;
+  }
+
+  return toArticle(article as unknown as DbArticle);
 }
 
 export async function getArticlesByCategoryFromDb(categorySlug: string, limit = 10): Promise<ArticleType[]> {
-  const articles = await prisma.article.findMany({
-    where: {
-      status: "PUBLISHED",
-      category: { slug: categorySlug },
-    },
-    include: articleInclude,
-    orderBy: { publishedAt: "desc" },
-    take: limit,
-  });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return articles.map((a) => toArticle(a as any));
+  const supabase = await createClient();
+  
+  const { data: articles, error } = await supabase
+    .from("articles")
+    .select(`
+      *,
+      users!articles_author_id_fkey (id, name, avatar, bio, role),
+      categories!inner (id, name, slug, description, color)
+    `)
+    .eq("status", "PUBLISHED")
+    .eq("categories.slug", categorySlug)
+    .order("published_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error("Error fetching articles by category:", error);
+    return [];
+  }
+
+  return (articles || []).map((a) => toArticle(a as unknown as DbArticle));
 }
 
 export async function getAllPublishedSlugs(): Promise<string[]> {
-  const articles = await prisma.article.findMany({
-    where: { status: "PUBLISHED" },
-    select: { slug: true },
-  });
-  return articles.map((a) => a.slug);
+  const supabase = await createClient();
+  
+  const { data: articles, error } = await supabase
+    .from("articles")
+    .select("slug")
+    .eq("status", "PUBLISHED");
+
+  if (error) {
+    return [];
+  }
+
+  return (articles || []).map((a) => a.slug);
 }
 
 export async function getRelatedArticlesFromDb(articleId: string, categoryId: string, limit = 3): Promise<ArticleType[]> {
-  const articles = await prisma.article.findMany({
-    where: {
-      status: "PUBLISHED",
-      categoryId,
-      id: { not: articleId },
-    },
-    include: articleInclude,
-    orderBy: { publishedAt: "desc" },
-    take: limit,
-  });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return articles.map((a) => toArticle(a as any));
+  const supabase = await createClient();
+  
+  const { data: articles, error } = await supabase
+    .from("articles")
+    .select(`
+      *,
+      users!articles_author_id_fkey (id, name, avatar, bio, role),
+      categories (id, name, slug, description, color)
+    `)
+    .eq("status", "PUBLISHED")
+    .eq("category_id", categoryId)
+    .neq("id", articleId)
+    .order("published_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    return [];
+  }
+
+  return (articles || []).map((a) => toArticle(a as unknown as DbArticle));
 }
 
 export async function searchArticlesInDb(query: string): Promise<ArticleType[]> {
-  const articles = await prisma.article.findMany({
-    where: {
-      status: "PUBLISHED",
-      OR: [
-        { title: { contains: query, mode: "insensitive" } },
-        { excerpt: { contains: query, mode: "insensitive" } },
-        { body: { contains: query, mode: "insensitive" } },
-      ],
-    },
-    include: articleInclude,
-    orderBy: { publishedAt: "desc" },
-    take: 20,
-  });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return articles.map((a) => toArticle(a as any));
+  const supabase = await createClient();
+  
+  const { data: articles, error } = await supabase
+    .from("articles")
+    .select(`
+      *,
+      users!articles_author_id_fkey (id, name, avatar, bio, role),
+      categories (id, name, slug, description, color)
+    `)
+    .eq("status", "PUBLISHED")
+    .or(`title.ilike.%${query}%,excerpt.ilike.%${query}%,content.ilike.%${query}%`)
+    .order("published_at", { ascending: false })
+    .limit(20);
+
+  if (error) {
+    console.error("Error searching articles:", error);
+    return [];
+  }
+
+  return (articles || []).map((a) => toArticle(a as unknown as DbArticle));
+}
+
+export async function getFeaturedArticles(limit = 5): Promise<ArticleType[]> {
+  const supabase = await createClient();
+  
+  const { data: articles, error } = await supabase
+    .from("articles")
+    .select(`
+      *,
+      users!articles_author_id_fkey (id, name, avatar, bio, role),
+      categories (id, name, slug, description, color)
+    `)
+    .eq("status", "PUBLISHED")
+    .eq("is_featured", true)
+    .order("published_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    return [];
+  }
+
+  return (articles || []).map((a) => toArticle(a as unknown as DbArticle));
+}
+
+export async function getBreakingArticles(limit = 3): Promise<ArticleType[]> {
+  const supabase = await createClient();
+  
+  const { data: articles, error } = await supabase
+    .from("articles")
+    .select(`
+      *,
+      users!articles_author_id_fkey (id, name, avatar, bio, role),
+      categories (id, name, slug, description, color)
+    `)
+    .eq("status", "PUBLISHED")
+    .eq("is_breaking", true)
+    .order("published_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    return [];
+  }
+
+  return (articles || []).map((a) => toArticle(a as unknown as DbArticle));
 }

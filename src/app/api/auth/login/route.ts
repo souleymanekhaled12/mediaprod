@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateCredentials, createAdminSession } from "@/lib/auth";
+import { signIn } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,16 +12,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!validateCredentials(email, password)) {
+    const result = await signIn(email, password);
+
+    if (!result.success) {
       return NextResponse.json(
-        { error: "Identifiants incorrects" },
+        { error: result.error || "Identifiants incorrects" },
         { status: 401 }
       );
     }
 
-    await createAdminSession();
-
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, user: result.user });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erreur serveur";
     return NextResponse.json({ error: message }, { status: 500 });

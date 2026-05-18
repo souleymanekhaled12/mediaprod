@@ -1,82 +1,92 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { createClient } from "@/lib/supabase/server";
 import { categories } from "@/lib/data/categories";
 import { authors } from "@/lib/data/authors";
 import { articles as localArticles } from "@/lib/data/articles";
 
 export async function POST() {
   try {
+    const supabase = await createClient();
+
     // Seed categories
     for (const cat of categories) {
-      await prisma.category.upsert({
-        where: { slug: cat.slug },
-        update: { name: cat.name, description: cat.description ?? "", color: cat.color },
-        create: {
+      await supabase
+        .from("categories")
+        .upsert({
           name: cat.name,
           slug: cat.slug,
           description: cat.description ?? "",
           color: cat.color,
-        },
+        }, { onConflict: "slug" });
+    }
+
+    // Get editor info
+    const editor = authors[0];
+
+    // Check if user exists in auth (we need a real auth user for this)
+    // For now, we'll check if there's any admin user
+    const { data: existingUsers } = await supabase
+      .from("users")
+      .select("*")
+      .eq("role", "EDITOR")
+      .limit(1);
+
+    let userId = existingUsers?.[0]?.id;
+
+    // If no editor exists, we can't seed articles without a real auth user
+    // The trigger will create the user profile when someone signs up
+    if (!userId) {
+      return NextResponse.json({
+        success: true,
+        message: "Categories seeded. Please sign up a user first to seed articles.",
+        categoriesSeeded: categories.length,
+        articlesSeeded: 0,
       });
     }
 
-    // Seed editor profile
-    const editor = authors[0];
-    const user = await prisma.user.upsert({
-      where: { email: "alassane.ibraima@lignerouge.info" },
-      update: {
-        name: editor.name,
-        bio: editor.bio,
-        avatar: editor.avatar,
-        role: "EDITOR",
-      },
-      create: {
-        email: "alassane.ibraima@lignerouge.info",
-        name: editor.name,
-        bio: editor.bio,
-        avatar: editor.avatar,
-        role: "EDITOR",
-      },
-    });
-
     // Seed articles
-    const dbCategories = await prisma.category.findMany();
-    const catMap = new Map(dbCategories.map((c) => [c.slug, c.id]));
+    const { data: dbCategories } = await supabase
+      .from("categories")
+      .select("id, slug");
+
+    const catMap = new Map((dbCategories || []).map((c) => [c.slug, c.id]));
 
     let seededCount = 0;
     for (const art of localArticles) {
       const categoryId = catMap.get(art.categorySlug);
       if (!categoryId) continue;
 
-      const existing = await prisma.article.findUnique({ where: { slug: art.slug } });
+      // Check if article exists
+      const { data: existing } = await supabase
+        .from("articles")
+        .select("slug")
+        .eq("slug", art.slug)
+        .single();
+
       if (existing) continue;
 
-      await prisma.article.create({
-        data: {
+      await supabase
+        .from("articles")
+        .insert({
           slug: art.slug,
           title: art.title,
-          subtitle: art.subtitle || null,
           excerpt: art.excerpt,
-          body: art.body,
-          image: art.image,
-          imageCaption: art.imageCaption || null,
+          content: art.body,
+          featured_image: art.image,
           status: art.status === "published" ? "PUBLISHED" : "DRAFT",
-          featured: art.featured,
-          breaking: art.breaking,
-          readTime: art.readTime,
-          views: art.views,
-          locale: art.locale,
-          publishedAt: new Date(art.publishedAt),
-          authorId: user.id,
-          categoryId,
-        },
-      });
+          is_featured: art.featured,
+          is_breaking: art.breaking,
+          reading_time: art.readTime,
+          view_count: art.views,
+          published_at: new Date(art.publishedAt).toISOString(),
+          author_id: userId,
+          category_id: categoryId,
+        });
       seededCount++;
     }
 
     return NextResponse.json({
       success: true,
-      user: { id: user.id, name: user.name, email: user.email },
       categoriesSeeded: categories.length,
       articlesSeeded: seededCount,
     });

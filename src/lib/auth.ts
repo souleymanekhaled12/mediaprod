@@ -1,48 +1,64 @@
-import { cookies } from "next/headers";
-import crypto from "crypto";
+import { createClient } from "@/lib/supabase/server";
 
-const SESSION_COOKIE = "lr_admin_session";
-const SESSION_MAX_AGE = 7 * 24 * 60 * 60; // 7 days in seconds
+export async function getCurrentUser() {
+  const supabase = await createClient();
+  const { data: { user }, error } = await supabase.auth.getUser();
+  
+  if (error || !user) {
+    return null;
+  }
 
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "ibrahimaalassane2016@gmail.com";
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "LigneRouge2026!";
+  // Fetch user profile from our users table
+  const { data: profile } = await supabase
+    .from("users")
+    .select("*")
+    .eq("id", user.id)
+    .single();
 
-const activeSessions = new Set<string>();
-
-export function validateCredentials(email: string, password: string): boolean {
-  return email === ADMIN_EMAIL && password === ADMIN_PASSWORD;
+  return profile;
 }
 
-export async function createAdminSession(): Promise<string> {
-  const token = crypto.randomBytes(32).toString("hex");
-  activeSessions.add(token);
+export async function isAdmin() {
+  const user = await getCurrentUser();
+  return user?.role === "ADMIN" || user?.role === "SUPER_ADMIN" || user?.role === "EDITOR";
+}
 
-  const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: SESSION_MAX_AGE,
+export async function signIn(email: string, password: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
   });
 
-  return token;
-}
-
-export async function getAdminSession(): Promise<boolean> {
-  try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get(SESSION_COOKIE)?.value;
-    if (!token) return false;
-    return activeSessions.has(token) || token.length === 64;
-  } catch {
-    return false;
+  if (error) {
+    return { success: false, error: error.message };
   }
+
+  return { success: true, user: data.user };
 }
 
-export async function destroyAdminSession(): Promise<void> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE)?.value;
-  if (token) activeSessions.delete(token);
-  cookieStore.delete(SESSION_COOKIE);
+export async function signUp(email: string, password: string, name?: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ??
+        `${process.env.NEXT_PUBLIC_SITE_URL || ''}/auth/callback`,
+      data: {
+        name: name || email.split('@')[0],
+      },
+    },
+  });
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  return { success: true, user: data.user };
+}
+
+export async function signOut() {
+  const supabase = await createClient();
+  await supabase.auth.signOut();
 }

@@ -1,18 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 
 const newsletterSchema = z.object({
   email: z.string().email("Adresse email invalide"),
+  name: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = await createClient();
     const body = await request.json();
-    const { email } = newsletterSchema.parse(body);
+    const { email, name } = newsletterSchema.parse(body);
 
-    // In production, this would integrate with a newsletter service
-    // (e.g., Mailchimp, ConvertKit, Resend)
-    console.log(`Newsletter subscription: ${email}`);
+    const { error } = await supabase
+      .from("newsletters")
+      .upsert({
+        email,
+        name: name || null,
+        is_active: true,
+        subscribed_at: new Date().toISOString(),
+      }, { onConflict: "email" });
+
+    if (error) {
+      return NextResponse.json(
+        { success: false, message: "Une erreur est survenue." },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       success: true,

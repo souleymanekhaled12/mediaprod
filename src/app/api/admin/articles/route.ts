@@ -1,31 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
+import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: NextRequest) {
   try {
+    const supabase = await createClient();
     const { searchParams } = request.nextUrl;
     const status = searchParams.get("status");
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "20", 10);
 
-    const where = status ? { status: status.toUpperCase() as "PUBLISHED" | "DRAFT" | "REVIEW" | "SCHEDULED" | "ARCHIVED" } : {};
+    let query = supabase
+      .from("articles")
+      .select(`
+        *,
+        users!articles_author_id_fkey (id, name, avatar),
+        categories (id, name, slug, color)
+      `, { count: "exact" });
 
-    const [articles, total] = await Promise.all([
-      prisma.article.findMany({
-        where,
-        include: {
-          author: { select: { id: true, name: true, avatar: true } },
-          category: { select: { id: true, name: true, slug: true, color: true } },
-        },
-        orderBy: { createdAt: "desc" },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      prisma.article.count({ where }),
-    ]);
+    if (status) {
+      query = query.eq("status", status.toUpperCase());
+    }
 
-    return NextResponse.json({ articles, total, page, limit });
+    const { data: articles, count, error } = await query
+      .order("created_at", { ascending: false })
+      .range((page - 1) * limit, page * limit - 1);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ 
+      articles: articles || [], 
+      total: count || 0, 
+      page, 
+      limit 
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -34,6 +44,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = await createClient();
     const body = await request.json();
     const { title, subtitle, excerpt, content, categoryId, authorId, image, imageCaption, status, featured, breaking, tags } = body;
 
@@ -52,34 +63,44 @@ export async function POST(request: NextRequest) {
       .replace(/^-+|-+$/g, "")
       .slice(0, 100);
 
-    const existingSlug = await prisma.article.findUnique({ where: { slug } });
+    // Check for existing slug
+    const { data: existingSlug } = await supabase
+      .from("articles")
+      .select("slug")
+      .eq("slug", slug)
+      .single();
+
     const finalSlug = existingSlug ? `${slug}-${Date.now()}` : slug;
 
     const wordCount = content.replace(/<[^>]*>/g, "").split(/\s+/).length;
-    const readTime = Math.max(1, Math.ceil(wordCount / 200));
+    const readingTime = Math.max(1, Math.ceil(wordCount / 200));
 
-    const article = await prisma.article.create({
-      data: {
+    const { data: article, error } = await supabase
+      .from("articles")
+      .insert({
         slug: finalSlug,
         title,
-        subtitle: subtitle || null,
         excerpt,
-        body: content,
-        image: image || null,
-        imageCaption: imageCaption || null,
+        content,
+        featured_image: image || null,
         status: status === "published" ? "PUBLISHED" : "DRAFT",
-        featured: featured || false,
-        breaking: breaking || false,
-        readTime,
-        publishedAt: status === "published" ? new Date() : null,
-        authorId,
-        categoryId,
-      },
-      include: {
-        author: { select: { id: true, name: true } },
-        category: { select: { id: true, name: true, slug: true } },
-      },
-    });
+        is_featured: featured || false,
+        is_breaking: breaking || false,
+        reading_time: readingTime,
+        published_at: status === "published" ? new Date().toISOString() : null,
+        author_id: authorId,
+        category_id: categoryId,
+      })
+      .select(`
+        *,
+        users!articles_author_id_fkey (id, name),
+        categories (id, name, slug)
+      `)
+      .single();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
 
     // Handle tags
     if (tags && Array.isArray(tags) && tags.length > 0) {
@@ -91,15 +112,18 @@ export async function POST(request: NextRequest) {
           .replace(/[^a-z0-9]+/g, "-")
           .replace(/^-+|-+$/g, "");
 
-        const tag = await prisma.tag.upsert({
-          where: { slug: tagSlug },
-          update: {},
-          create: { name: tagName, slug: tagSlug },
-        });
+        // Upsert tag
+        const { data: tag } = await supabase
+          .from("tags")
+          .upsert({ name: tagName, slug: tagSlug }, { onConflict: "slug" })
+          .select()
+          .single();
 
-        await prisma.articleTag.create({
-          data: { articleId: article.id, tagId: tag.id },
-        });
+        if (tag && article) {
+          await supabase
+            .from("article_tags")
+            .insert({ article_id: article.id, tag_id: tag.id });
+        }
       }
     }
 

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
 
 const PROFANITY_PATTERNS = [
   /\bspam\b/i,
@@ -17,32 +19,46 @@ function moderateContent(content: string): { approved: boolean; reason?: string 
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = await createClient();
+    const user = await getCurrentUser();
     const body = await request.json();
-    const { articleSlug, author, content, parentId } = body;
+    const { articleId, content, parentId } = body;
 
-    if (!articleSlug || !author || !content) {
+    if (!articleId || !content) {
       return NextResponse.json(
-        { error: "articleSlug, author and content are required" },
+        { error: "articleId and content are required" },
         { status: 400 }
       );
     }
 
-    if (typeof author !== "string" || author.length < 2 || author.length > 100) {
-      return NextResponse.json({ error: "Invalid author name" }, { status: 400 });
+    if (!user) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      );
     }
 
     const moderation = moderateContent(content);
 
-    const comment = {
-      id: `comment-${Date.now()}`,
-      articleSlug,
-      author: author.trim(),
-      content: content.trim(),
-      parentId: parentId || null,
-      createdAt: new Date().toISOString(),
-      approved: moderation.approved,
-      moderationReason: moderation.reason || null,
-    };
+    const { data: comment, error } = await supabase
+      .from("comments")
+      .insert({
+        article_id: articleId,
+        author_id: user.id,
+        content: content.trim(),
+        parent_id: parentId || null,
+        is_approved: moderation.approved,
+        is_flagged: !moderation.approved,
+      })
+      .select(`
+        *,
+        users!comments_author_id_fkey (id, name, avatar)
+      `)
+      .single();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
 
     return NextResponse.json({
       success: true,
@@ -57,16 +73,35 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const articleSlug = searchParams.get("articleSlug");
+  try {
+    const supabase = await createClient();
+    const { searchParams } = new URL(request.url);
+    const articleId = searchParams.get("articleId");
 
-  if (!articleSlug) {
-    return NextResponse.json({ error: "articleSlug is required" }, { status: 400 });
+    if (!articleId) {
+      return NextResponse.json({ error: "articleId is required" }, { status: 400 });
+    }
+
+    const { data: comments, error, count } = await supabase
+      .from("comments")
+      .select(`
+        *,
+        users!comments_author_id_fkey (id, name, avatar)
+      `, { count: "exact" })
+      .eq("article_id", articleId)
+      .eq("is_approved", true)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      comments: comments || [],
+      total: count || 0,
+      articleId,
+    });
+  } catch {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
-
-  return NextResponse.json({
-    comments: [],
-    total: 0,
-    articleSlug,
-  });
 }
