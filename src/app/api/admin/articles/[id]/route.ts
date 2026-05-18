@@ -41,16 +41,19 @@ export async function PUT(
     const { id } = await params;
     const supabase = await createClient();
     const body = await request.json();
-    const { title, subtitle, excerpt, content, categoryId, image, imageCaption, status, featured, breaking } = body;
+    const { title, subtitle, excerpt, content, categoryId, image, imageCaption, status, featured, breaking, authorName } = body;
 
     const updateData: Record<string, unknown> = {};
     if (title !== undefined) updateData.title = title;
+    if (subtitle !== undefined) updateData.subtitle = subtitle;
     if (excerpt !== undefined) updateData.excerpt = excerpt;
     if (content !== undefined) updateData.content = content;
     if (categoryId !== undefined) updateData.category_id = categoryId;
     if (image !== undefined) updateData.featured_image = image;
+    if (imageCaption !== undefined) updateData.image_caption = imageCaption;
     if (featured !== undefined) updateData.is_featured = featured;
     if (breaking !== undefined) updateData.is_breaking = breaking;
+    if (authorName !== undefined) updateData.author_name = authorName;
 
     if (status !== undefined) {
       updateData.status = status === "published" ? "PUBLISHED" : status === "draft" ? "DRAFT" : status.toUpperCase();
