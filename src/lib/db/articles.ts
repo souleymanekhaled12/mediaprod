@@ -232,24 +232,55 @@ export async function getFeaturedArticles(limit = 5): Promise<ArticleType[]> {
   return (articles || []).map((a) => toArticle(a as unknown as DbArticle));
 }
 
-export async function getBreakingArticles(limit = 3): Promise<ArticleType[]> {
+// User and Category helper functions
+export async function getUserById(userId: string) {
   const supabase = await createClient();
-  
-  const { data: articles, error } = await supabase
-    .from("articles")
-    .select(`
-      *,
-      users!articles_author_id_fkey (id, name, avatar, bio, role),
-      categories (id, name, slug, description, color)
-    `)
-    .eq("status", "PUBLISHED")
-    .eq("is_breaking", true)
-    .order("published_at", { ascending: false })
-    .limit(limit);
+  const { data } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', userId)
+    .single();
+  return data;
+}
 
-  if (error) {
-    return [];
-  }
+export async function getUsersByRole(roles: string[]) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('users')
+    .select('*')
+    .in('role', roles);
+  return data || [];
+}
 
-  return (articles || []).map((a) => toArticle(a as unknown as DbArticle));
+export async function getFirstAdminUser() {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('users')
+    .select('*')
+    .eq('role', 'ADMIN')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .single();
+  return data || null;
+}
+
+export async function getCategories() {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('categories')
+    .select('*')
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true });
+  return data || [];
+}
+
+export async function getCategoryBySlug(slug: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('categories')
+    .select('*')
+    .eq('slug', slug)
+    .eq('is_active', true)
+    .single();
+  return data || null;
 }

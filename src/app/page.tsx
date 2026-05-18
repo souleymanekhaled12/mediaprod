@@ -3,8 +3,7 @@ import { ArticleCard } from "@/components/articles/ArticleCard";
 import { NewsletterPreferences } from "@/components/articles/NewsletterPreferences";
 import { FinanceWidget } from "@/components/widgets/FinanceWidget";
 import { WeatherWidget } from "@/components/widgets/WeatherWidget";
-import { getPublishedArticles, getArticlesByCategoryFromDb } from "@/lib/db/articles";
-import { prisma } from "@/lib/prisma";
+import { getPublishedArticles, getArticlesByCategoryFromDb, getCategories } from "@/lib/db/articles";
 import Link from "next/link";
 import type { Article } from "@/types";
 
@@ -20,7 +19,7 @@ export default async function HomePage() {
     getArticlesByCategoryFromDb("politique", 3),
     getArticlesByCategoryFromDb("technologie", 3),
     getArticlesByCategoryFromDb("sport", 3),
-    prisma.category.findMany({ orderBy: { order: "asc" } }),
+    getCategories(),
   ]);
 
   if (!mainArticle) {
